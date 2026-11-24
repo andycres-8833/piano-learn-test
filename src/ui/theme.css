@@ -1,0 +1,39 @@
+/* Design tokens — names match the Figma variables (Piano Learn – MVP UI Draft). */
+:root {
+  --bg-canvas: #f6f2ea;
+  --bg-surface: #fffdf9;
+  --bg-sunken: #efe9de;
+  --border-default: #e2dacb;
+  --border-strong: #c9bfad;
+  --text-primary: #1e1a15;
+  --text-secondary: #6b6358;
+  --text-inverse: #fffdf9;
+  --accent-primary: #2b4acb;
+  --accent-primary-soft: #e3e8fb;
+  --hand-right: #2b4acb;
+  --hand-left: #c2621a;
+  --note-upcoming: #9c9488;
+  --note-current: #2b4acb;
+  --note-correct: #1e8a4c;
+  --note-wrong: #d13b2e;
+  --note-correct-soft: #ddf1e4;
+  --note-wrong-soft: #fbe1de;
+  --heat-1: #fcefc7;
+  --heat-2: #f8d27a;
+  --heat-3: #f0a04b;
+
+  --space-4: 4px;
+  --space-8: 8px;
+  --space-12: 12px;
+  --space-16: 16px;
+  --space-24: 24px;
+  --space-32: 32px;
+  --space-48: 48px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-full: 999px;
+
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-body: 'DM Sans', system-ui, sans-serif;
+}
