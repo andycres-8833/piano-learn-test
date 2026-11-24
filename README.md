@@ -23,8 +23,9 @@ Milestone 1 of 5 (see the spec for the full plan):
 - [x] Score → playable steps (chords, ties, grace notes, repeats and 1st/2nd endings)
 - [x] Wait mode: the cursor waits for the right keys; wrong keys block until released
 - [x] Computer-keyboard input (A–; white keys, W–P black keys, Z/X octave)
+- [x] MIDI keyboard: plug in over USB and it connects automatically (Chrome/Edge)
 - [x] Right/left hand toggles
-- [ ] MIDI keyboard, on-screen piano, ghost notes (milestone 2)
+- [ ] On-screen piano, ghost notes, keyboard settings (milestone 2)
 - [ ] Sound (milestone 3) · Sections & loops (milestone 4) · Library & progress (milestone 5)
 
 ## Credits

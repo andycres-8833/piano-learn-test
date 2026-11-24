@@ -2,8 +2,41 @@ import { useState } from 'react';
 import type { Hand, ParsedScore } from '../score/types';
 import { ScoreView } from '../score/ScoreView';
 import { useComputerKeyboard } from '../input/useComputerKeyboard';
+import { type MidiStatus, useMidiInput } from '../input/useMidiInput';
 import { midiToName } from '../input/notes';
 import { usePractice } from './usePractice';
+
+function MidiPill({ status }: { status: MidiStatus }) {
+  switch (status.state) {
+    case 'connected':
+      return (
+        <span className="pill pill--ok" title={status.names.join(', ')}>
+          <span className="dot dot--ok" /> {status.names[0]}
+          {status.names.length > 1 ? ` +${status.names.length - 1}` : ''} · connected
+        </span>
+      );
+    case 'pending':
+      return <span className="pill pill--neutral"><span className="dot" /> Looking for a keyboard…</span>;
+    case 'no-device':
+      return (
+        <span className="pill pill--neutral" title="Plug in a MIDI keyboard over USB and it will connect automatically.">
+          <span className="dot" /> No keyboard found · plug one in
+        </span>
+      );
+    case 'denied':
+      return (
+        <span className="pill pill--warn" title="Allow MIDI access for this site in the browser's address bar, then reload.">
+          <span className="dot dot--wrong" /> MIDI access blocked
+        </span>
+      );
+    case 'unsupported':
+      return (
+        <span className="pill pill--warn" title="Use Chrome or Edge on a computer to connect a MIDI keyboard.">
+          <span className="dot dot--wrong" /> This browser can’t use MIDI
+        </span>
+      );
+  }
+}
 
 interface Props {
   score: ParsedScore;
@@ -14,6 +47,7 @@ interface Props {
 export function PracticeScreen({ score, xml, onBack }: Props) {
   const p = usePractice(score);
   const kb = useComputerKeyboard(p.noteOn, p.noteOff);
+  const midi = useMidiInput(p.noteOn, p.noteOff);
   const [renderError, setRenderError] = useState<string | null>(null);
 
   const toggleHand = (hand: Hand) => {
@@ -33,9 +67,7 @@ export function PracticeScreen({ score, xml, onBack }: Props) {
             {score.measureCount} bars
           </p>
         </div>
-        <span className="pill pill--neutral" title="MIDI keyboard support arrives in the next milestone">
-          <span className="dot" /> Computer keys · octave {kb.octave}
-        </span>
+        <MidiPill status={midi} />
       </header>
 
       <div className="toolbar">
@@ -98,7 +130,7 @@ export function PracticeScreen({ score, xml, onBack }: Props) {
       )}
 
       <footer className="kb-help">
-        <strong>Computer keys:</strong> A S D F G H J K L ; = white keys from C{kb.octave} ·
+        <strong>No keyboard? Use computer keys:</strong> A S D F G H J K L ; = white keys from C{kb.octave} ·
         W E T Y U O P = black keys · Z / X = octave down / up
       </footer>
     </div>
