@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { OpenSheetMusicDisplay, type GraphicalNote } from 'opensheetmusicdisplay';
 import { type Hand, positionKey } from './types';
 
-export type NoteState = 'upcoming' | 'current' | 'correct';
+export type NoteState = 'upcoming' | 'current' | 'correct' | 'skipped';
 
 interface Props {
   xml: string;
@@ -14,6 +14,12 @@ interface Props {
   wrongPulse: number;
   /** Hands the player is practising; notes of a disabled hand are never highlighted as "play now". */
   hands: Record<Hand, boolean>;
+  /** Player's keyboard range; notes outside it are drawn faded (they're skipped). */
+  range: { low: number; high: number };
+  /** Full hints: a dashed ghost note at the pitch of the wrong key being held. */
+  ghost?: { midi: number; label: string };
+  /** Pixels at the bottom of the window covered by the on-screen keyboard. */
+  bottomInset?: number;
   onReady?: () => void;
   onError?: (err: Error) => void;
 }
@@ -27,7 +33,18 @@ const COLOR_VAR: Record<NoteState, string> = {
   upcoming: 'var(--note-upcoming)',
   current: 'var(--note-current)',
   correct: 'var(--note-correct)',
+  skipped: 'var(--note-skipped)',
 };
+
+/** OSMD stores pitch as halfTone, where MIDI = halfTone + 12. */
+const midiOf = (note: GraphicalNote) =>
+  note.sourceNote && !note.sourceNote.isRest() ? note.sourceNote.halfTone + 12 : undefined;
+
+const LETTER_OF_PC = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6]; // C C# D D# E F F# G G# A A# B → letter index
+/** Diatonic position (C0 = 0, D0 = 1 …). Black keys sit on the letter below (as sharps). */
+const diatonic = (midi: number) => (Math.floor(midi / 12) - 1) * 7 + LETTER_OF_PC[midi % 12];
+const TREBLE_TOP = diatonic(77); // F5, top line of the treble staff
+const BASS_TOP = diatonic(57); // A3, top line of the bass staff
 
 const UNIT_PX = 10; // OSMD draws 10px per unit at zoom 1
 
@@ -72,9 +89,12 @@ function paintNote(note: GraphicalNote, color: string) {
   });
 }
 
-export function ScoreView({ xml, currentKey, playedKeys, wrongPulse, hands, onReady, onError }: Props) {
+export function ScoreView({
+  xml, currentKey, playedKeys, wrongPulse, hands, range, ghost, bottomInset = 0, onReady, onError,
+}: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const bandRef = useRef<HTMLDivElement>(null);
+  const ghostRef = useRef<HTMLDivElement>(null);
   const osmdRef = useRef<OpenSheetMusicDisplay | null>(null);
   const positionsRef = useRef(new Map<string, Position>());
   const [renderCount, setRenderCount] = useState(0);
@@ -145,8 +165,11 @@ export function ScoreView({ xml, currentKey, playedKeys, wrongPulse, hands, onRe
 
     for (const [key, pos] of positionsRef.current) {
       for (const n of pos.notes) {
-        const state: NoteState =
-          key === currentKey
+        const midi = midiOf(n);
+        const outOfRange = midi !== undefined && (midi < range.low || midi > range.high);
+        const state: NoteState = outOfRange
+          ? 'skipped'
+          : key === currentKey
             ? hands[handOf(n)] ? 'current' : 'upcoming'
             : playedKeys.has(key) ? 'correct' : 'upcoming';
         paintNote(n, COLOR_VAR[state]);
@@ -190,10 +213,27 @@ export function ScoreView({ xml, currentKey, playedKeys, wrongPulse, hands, onRe
 
     // Keep the current system in view, near the top.
     const bandRect = band.getBoundingClientRect();
-    if (bandRect.top < 120 || bandRect.bottom > window.innerHeight - 40) {
+    if (bandRect.top < 120 || bandRect.bottom > window.innerHeight - bottomInset - 24) {
       window.scrollBy({ top: bandRect.top - 140, behavior: 'smooth' });
     }
-  }, [currentKey, playedKeys, renderCount, hands]);
+
+    // Ghost note for the wrong key, drawn on the staff it belongs to, just right of the cursor.
+    const ghostEl = ghostRef.current;
+    if (ghostEl) {
+      if (ghost && staves.length) {
+        const staffIndex = ghost.midi >= 60 || staves.length < 2 ? 0 : 1;
+        const staffTop = staves[staffIndex]?.PositionAndShape.AbsolutePosition.y ?? ys[0];
+        const topLine = staffIndex === 0 ? TREBLE_TOP : BASS_TOP;
+        const yUnits = staffTop + (topLine - diatonic(ghost.midi)) * 0.5;
+        ghostEl.style.display = 'flex';
+        ghostEl.style.left = `${right - hostRect.left + 6}px`;
+        ghostEl.style.top = `${yUnits * zoom}px`;
+        ghostEl.querySelector('span')!.textContent = ghost.label;
+      } else {
+        ghostEl.style.display = 'none';
+      }
+    }
+  }, [currentKey, playedKeys, renderCount, hands, range.low, range.high, ghost?.midi, ghost?.label, bottomInset]);
 
   // Flash the band red on a wrong key.
   useEffect(() => {
@@ -208,6 +248,10 @@ export function ScoreView({ xml, currentKey, playedKeys, wrongPulse, hands, onRe
     <div className="score-paper">
       <div className="score-stage">
         <div ref={bandRef} className="score-band" aria-hidden />
+        <div ref={ghostRef} className="score-ghost" aria-hidden>
+          <i />
+          <span />
+        </div>
         <div ref={hostRef} className="score-host" />
       </div>
     </div>

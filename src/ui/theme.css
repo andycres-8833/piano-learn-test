@@ -18,6 +18,10 @@
   --note-wrong: #d13b2e;
   --note-correct-soft: #ddf1e4;
   --note-wrong-soft: #fbe1de;
+  --note-skipped: #d9d2c5;
+  --key-white: #ffffff;
+  --key-black: #221e19;
+  --key-pressed: #c9bfad;
   --heat-1: #fcefc7;
   --heat-2: #f8d27a;
   --heat-3: #f0a04b;

@@ -1,9 +1,13 @@
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import type { Hand, ParsedScore } from '../score/types';
 import { ScoreView } from '../score/ScoreView';
 import { useComputerKeyboard } from '../input/useComputerKeyboard';
 import { type MidiStatus, useMidiInput } from '../input/useMidiInput';
-import { midiToName } from '../input/notes';
+import { KEYBOARD_RANGES, midiToName } from '../input/notes';
+import { hintFor } from '../feedback/hints';
+import { PianoKeyboard } from '../ui/PianoKeyboard';
+import { useSettings } from './settings';
+import { SettingsPanel } from './SettingsPanel';
 import { usePractice } from './usePractice';
 
 function MidiPill({ status }: { status: MidiStatus }) {
@@ -45,16 +49,48 @@ interface Props {
 }
 
 export function PracticeScreen({ score, xml, onBack }: Props) {
-  const p = usePractice(score);
+  const [settings, updateSettings] = useSettings();
+  const range = KEYBOARD_RANGES[settings.keyboardSize];
+  const p = usePractice(score, range);
   const kb = useComputerKeyboard(p.noteOn, p.noteOff);
-  const midi = useMidiInput(p.noteOn, p.noteOff);
+  const midi = useMidiInput(p.noteOn, p.noteOff, settings.midiInputId);
   const [renderError, setRenderError] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // Height of the keyboard dock, so auto-scroll keeps the cursor above it.
+  const dockRef = useRef<HTMLDivElement>(null);
+  const [dockHeight, setDockHeight] = useState(0);
+  useLayoutEffect(() => {
+    const el = dockRef.current;
+    if (!el) return setDockHeight(0);
+    const ro = new ResizeObserver(() => setDockHeight(el.offsetHeight));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [settings.showKeyboard]);
 
   const toggleHand = (hand: Hand) => {
     const next = { ...p.hands, [hand]: !p.hands[hand] };
     if (!next.R && !next.L) return; // keep at least one hand on
     p.setHands(next);
   };
+
+  // Wrong-key feedback and hint (docs/SPEC.md §4.4.1).
+  const wrongMidi = p.feedback?.kind === 'wrong' ? p.feedback.midi : undefined;
+  const requiredMidis = p.required.map((n) => n.midi);
+  const hint =
+    wrongMidi !== undefined && settings.hintLevel !== 'off'
+      ? hintFor(wrongMidi, requiredMidis, p.held)
+      : null;
+  const wrongStillHeld = wrongMidi !== undefined && p.wrongKeys.has(wrongMidi);
+  const full = settings.hintLevel === 'full' && wrongStillHeld;
+  const ghost = full && wrongMidi !== undefined ? { midi: wrongMidi, label: midiToName(wrongMidi) } : undefined;
+  const arrow = full && wrongMidi !== undefined && hint?.targetMidi !== undefined
+    ? { from: wrongMidi, to: hint.targetMidi }
+    : undefined;
+
+  const skippedHere =
+    !p.finished &&
+    (p.step?.notes ?? []).some((n) => p.hands[n.hand] && (n.midi < range.low || n.midi > range.high));
 
   return (
     <div className="practice">
@@ -68,6 +104,7 @@ export function PracticeScreen({ score, xml, onBack }: Props) {
           </p>
         </div>
         <MidiPill status={midi} />
+        <button className="btn btn--secondary" onClick={() => setSettingsOpen(true)}>⚙ Settings</button>
       </header>
 
       <div className="toolbar">
@@ -106,10 +143,12 @@ export function PracticeScreen({ score, xml, onBack }: Props) {
               </span>
             ))}
             {p.step && <span className="status__bar">Bar {p.step.measureNumber}</span>}
-            {p.feedback?.kind === 'wrong' && p.feedback.midi !== undefined && (
+            {skippedHere && <span className="status__bar">· some notes are outside your keyboard and are skipped</span>}
+            {wrongMidi !== undefined && (
               <span className="status__wrong">
-                You played {midiToName(p.feedback.midi)}
-                {p.wrongKeys.size > 0 ? ' (let go to continue)' : ''}
+                You played {midiToName(wrongMidi)}.
+                {hint && <span className="status__hint"> Hint: {hint.text}</span>}
+                {wrongStillHeld && <span className="status__letgo"> (let go first)</span>}
               </span>
             )}
           </>
@@ -125,14 +164,41 @@ export function PracticeScreen({ score, xml, onBack }: Props) {
           playedKeys={p.playedKeys}
           wrongPulse={p.wrongPulse}
           hands={p.hands}
+          range={range}
+          ghost={ghost}
+          bottomInset={dockHeight}
           onError={(e) => setRenderError(e.message)}
         />
       )}
 
       <footer className="kb-help">
         <strong>No keyboard? Use computer keys:</strong> A S D F G H J K L ; = white keys from C{kb.octave} ·
-        W E T Y U O P = black keys · Z / X = octave down / up
+        W E T Y U O P = black keys · Z / X = octave down / up · or click the on-screen keys
       </footer>
+
+      {settings.showKeyboard && (
+        <div className="dock" ref={dockRef}>
+          <PianoKeyboard
+            low={range.low}
+            high={range.high}
+            next={p.finished ? [] : p.required}
+            held={p.held}
+            wrong={p.wrongKeys}
+            arrow={arrow}
+            onNoteOn={p.noteOn}
+            onNoteOff={p.noteOff}
+          />
+        </div>
+      )}
+
+      {settingsOpen && (
+        <SettingsPanel
+          settings={settings}
+          update={updateSettings}
+          midi={midi}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
     </div>
   );
 }

@@ -6,13 +6,23 @@ export type MidiStatus =
   | { state: 'pending' }
   | { state: 'denied' }
   | { state: 'no-device' }
-  | { state: 'connected'; names: string[] };
+  | { state: 'connected'; names: string[]; devices: MidiDevice[] };
+
+export interface MidiDevice {
+  id: string;
+  name: string;
+}
 
 /**
- * Connects to every MIDI keyboard plugged in (and any plugged in later) and
- * forwards note on / note off. No setup needed: plug in and play.
+ * Connects to MIDI keyboards (including ones plugged in later) and forwards
+ * note on / note off. With `selectedId = 'all'` every keyboard is used, so no
+ * setup is needed; otherwise only the chosen keyboard is listened to.
  */
-export function useMidiInput(onNoteOn: (midi: number) => void, onNoteOff: (midi: number) => void): MidiStatus {
+export function useMidiInput(
+  onNoteOn: (midi: number) => void,
+  onNoteOff: (midi: number) => void,
+  selectedId: 'all' | string = 'all',
+): MidiStatus {
   const [status, setStatus] = useState<MidiStatus>(() =>
     typeof navigator !== 'undefined' && 'requestMIDIAccess' in navigator
       ? { state: 'pending' }
@@ -20,6 +30,8 @@ export function useMidiInput(onNoteOn: (midi: number) => void, onNoteOff: (midi:
   );
   const handlers = useRef({ onNoteOn, onNoteOff });
   handlers.current = { onNoteOn, onNoteOff };
+  const selected = useRef(selectedId);
+  const syncRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     if (!('requestMIDIAccess' in navigator)) return;
@@ -32,6 +44,11 @@ export function useMidiInput(onNoteOn: (midi: number) => void, onNoteOff: (midi:
     const onMessage = (input: MIDIInput) => (e: MIDIMessageEvent) => {
       const msg = parseMidiMessage(e.data);
       if (!msg) return;
+      const sel = selected.current;
+      // Only the chosen keyboard counts (if it's unplugged, fall back to all).
+      // Note-offs always pass so nothing gets stuck after switching.
+      const chosenConnected = sel !== 'all' && access?.inputs.get(sel)?.state === 'connected';
+      if (msg.type === 'on' && chosenConnected && sel !== input.id) return;
       const notes = held.get(input.id) ?? new Set<number>();
       held.set(input.id, notes);
       if (msg.type === 'on') {
@@ -45,10 +62,10 @@ export function useMidiInput(onNoteOn: (midi: number) => void, onNoteOff: (midi:
 
     const sync = () => {
       if (!access || cancelled) return;
-      const names: string[] = [];
+      const devices: MidiDevice[] = [];
       access.inputs.forEach((input) => {
         if (input.state !== 'connected') return;
-        names.push(input.name || 'MIDI keyboard');
+        devices.push({ id: input.id, name: input.name || 'MIDI keyboard' });
         if (!attached.has(input.id)) {
           input.onmidimessage = onMessage(input);
           attached.add(input.id);
@@ -63,9 +80,13 @@ export function useMidiInput(onNoteOn: (midi: number) => void, onNoteOff: (midi:
           attached.delete(id);
         }
       }
-      setStatus(names.length ? { state: 'connected', names } : { state: 'no-device' });
+      const sel = selected.current;
+      const active = sel === 'all' ? devices : devices.filter((d) => d.id === sel);
+      const names = (active.length ? active : devices).map((d) => d.name);
+      setStatus(devices.length ? { state: 'connected', names, devices } : { state: 'no-device' });
     };
 
+    syncRef.current = sync;
     navigator
       .requestMIDIAccess()
       .then((a) => {
@@ -87,6 +108,12 @@ export function useMidiInput(onNoteOn: (midi: number) => void, onNoteOff: (midi:
       held.forEach((notes) => notes.forEach((n) => handlers.current.onNoteOff(n)));
     };
   }, []);
+
+  // Switching keyboards: refresh the status (names shown in the pill).
+  useEffect(() => {
+    selected.current = selectedId;
+    syncRef.current();
+  }, [selectedId]);
 
   return status;
 }

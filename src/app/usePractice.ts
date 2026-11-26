@@ -1,7 +1,6 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { type EngineEvent, WaitModeEngine } from '../engine/WaitModeEngine';
 import { type Hand, type ParsedScore, type Step, positionKey } from '../score/types';
-import { KEYBOARD_RANGES } from '../input/notes';
 
 const keyOf = (s: Step) => positionKey(s.measureIndex, s.offsetQ);
 const sourceOrder = (s: Step) => s.measureIndex * 10_000 + s.offsetQ;
@@ -25,11 +24,11 @@ export interface Feedback {
   clean?: boolean;
 }
 
-export function usePractice(score: ParsedScore) {
+export function usePractice(score: ParsedScore, range: { low: number; high: number }) {
   const [hands, setHandsState] = useState<Record<Hand, boolean>>({ R: true, L: true });
   const engineRef = useRef<WaitModeEngine | null>(null);
   if (!engineRef.current) {
-    engineRef.current = new WaitModeEngine(score.steps, { hands, range: KEYBOARD_RANGES[88] });
+    engineRef.current = new WaitModeEngine(score.steps, { hands, range });
   }
   const engine = engineRef.current;
 
@@ -53,6 +52,16 @@ export function usePractice(score: ParsedScore) {
     setHeld(new Set(engine.heldKeys));
     setVersion((v) => v + 1);
   }, [engine]);
+
+  // Keyboard size changed in Settings: restart with the new range.
+  const rangeKey = `${range.low}-${range.high}`;
+  const firstRange = useRef(rangeKey);
+  useEffect(() => {
+    if (firstRange.current === rangeKey) return;
+    firstRange.current = rangeKey;
+    setFeedback(null);
+    handle(engine.setOptions({ range }));
+  }, [rangeKey]);
 
   const noteOn = useCallback((midi: number) => handle(engine.noteOn(midi)), [engine, handle]);
   const noteOff = useCallback((midi: number) => handle(engine.noteOff(midi)), [engine, handle]);

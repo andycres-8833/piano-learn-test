@@ -68,7 +68,7 @@ A Step's **required** notes are its notes, filtered to the enabled hands, minus 
 
 | Event | Result |
 |---|---|
-| A key is pressed that is not in *required* | **Wrong key.** Flash red, show a ghost note on the staff, add to the bar's error count, and mark the current pass as not clean. The Step is **blocked** while any wrong key is held. |
+| A key is pressed that is not in *required* | **Wrong key.** Flash red, show the wrong-key hint (§4.4.1), add to the bar's error count, and mark the current pass as not clean. The Step is **blocked** while any wrong key is held. |
 | `held ⊇ required` and no wrong key is held | **Step passes.** Notes turn green and the cursor advances. |
 | A required note needs to be re-struck (the same pitch as in the previous step) | The key must be released and pressed again. Holding it from the previous step does not count. |
 
@@ -78,11 +78,29 @@ Notes:
 - Notes of a disabled hand are excluded from *required*. If "plays along" is on, they are played through Tone.js when their Step is reached.
 
 ### 4.4 Feedback
-- **Score colours:** grey for upcoming, blue for the current step, green for correct, and a red flash for wrong. A wrong key also shows a dashed red ghost note at its pitch with the label "You played E5".
+- **Score colours:** grey for upcoming, blue for the current step, green for correct, and a red flash for wrong. Notes outside the player's keyboard range are drawn faded and are skipped.
 - **Cursor:** the OSMD cursor, styled as a soft blue band.
 - **On-screen keyboard** (can be hidden): the next keys are shown in the hand colour (RH blue, LH orange) with fingering numbers. Pressed keys flash green (correct) or red (wrong).
 - **Trouble-bar heat map** (toggle): each bar is tinted by its cumulative wrong-note count.
 - **Auto-scroll:** the page scrolls so the cursor's system stays near the top.
+
+#### 4.4.1 Wrong-key hints
+Goal: help a self-learner correct the mistake without becoming dependent on hints. The **Hints** setting has three levels, and the default is **Light**.
+
+| Level | What a wrong key shows |
+|---|---|
+| **Off** | Red flash and "You played E5". |
+| **Light** (default) | Same as Off, plus a directive hint: "You played E5. Hint: 2 keys lower → C5". |
+| **Full** | Same as Light, plus an arrow on the on-screen keyboard from the wrong key to the right one, and a dashed red ghost note on the staff at the pitch that was played. |
+
+- Hints appear on the **first** wrong press.
+- **Wording:** use "keys lower / keys higher" (pitch direction, so it matches both the staff and the keyboard), followed by "→" and the target note name.
+- **Counting:** count white keys only. "N keys lower" means N white keys in that direction.
+- **Target:** the nearest required note (by pitch) that isn't already held. If every required note is already held, the hint is "let go of E5, the other keys are right".
+- **Special cases:**
+  - Same letter, wrong octave: "right note, one octave lower → C4".
+  - Black-key target (white-key counting can't reach it): "the black key just above F → F♯4".
+- The ghost note and the arrow disappear when the wrong key is released. The text stays until the step passes.
 
 ### 4.5 Sections and loops
 Modes:
@@ -127,7 +145,8 @@ interface ProgressRecord {
 }
 
 interface Settings {
-  midiInputId?: string;
+  midiInputId: 'all' | string;         // default 'all' (listen to every connected keyboard)
+  hintLevel: 'off' | 'light' | 'full'; // default 'light'
   keyboardSize: 61 | 76 | 88;
   cleanPassesRequired: number;         // default 3
   echoKeys: boolean;                   // default false
@@ -171,7 +190,7 @@ public/samples/   bundled public-domain sample piece
 | # | Milestone | Done when |
 |---|---|---|
 | 1 | Scaffold, file loading (xml and mxl), OSMD render, `buildSteps`, wait mode driven by the computer keyboard | The sample piece can be played start to finish with the keyboard. Engine unit tests pass. |
-| 2 | Web MIDI, the full feedback colours and ghost notes, the on-screen keyboard, fingering | A real keyboard drives the app. Wrong and right keys are shown on both the score and the keyboard. |
+| 2 | Web MIDI, the full feedback colours, wrong-key hints (Off/Light/Full) with the ghost note and keyboard arrow, the on-screen keyboard with fingering, and settings for keyboard choice, keyboard size, hints, and showing the keyboard | A real keyboard drives the app. Wrong and right keys are shown on both the score and the keyboard, with a hint toward the right key. |
 | 3 | Hand toggles, the sampled piano, the disabled hand playing along, Listen | Single-hand practice works, with audio. |
 | 4 | Section modes, loops, clean passes, auto-advance, final run-through | The full learning loop works. |
 | 5 | Library, IndexedDB persistence, resume, heat map, backup, onboarding and error states, applying the Figma design | The MVP is feature-complete. Deploy to static hosting. |
